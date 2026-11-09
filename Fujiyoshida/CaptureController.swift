@@ -152,7 +152,8 @@ final class CaptureController: ObservableObject {
         var cameraTime: TimeInterval = 0
         var windowStart = Date()
         var lastInfoRead = Date.distantPast
-        var failures = 1
+        var failures = 0
+        var streaming = false
         let preview = self.preview
 
         while !shouldStop {
@@ -179,7 +180,8 @@ final class CaptureController: ObservableObject {
                 let requested = Date()
                 let jpeg = try autoreleasepool { try camera.capturePreview() }
                 cameraTime += Date().timeIntervalSince(requested)
-                if failures > 0 {
+                if !streaming {
+                    streaming = true
                     failures = 0
                     publish("Streaming from \(camera.modelName)", streaming: true)
                 }
@@ -210,7 +212,6 @@ final class CaptureController: ObservableObject {
                 if elapsed >= 1 {
                     let fps = Int((Double(frameCount) / elapsed).rounded())
                     let perFrame = Int((cameraTime / Double(frameCount) * 1000).rounded())
-                    publish("Streaming from \(camera.modelName)", streaming: true)
                     publishRate("\(fps) fps · \(perFrame) ms/frame")
                     frameCount = 0
                     cameraTime = 0
@@ -218,6 +219,7 @@ final class CaptureController: ObservableObject {
                 }
             } catch {
                 failures += 1
+                streaming = false
                 publish(Self.stuckCameraStatus, streaming: false)
                 publishInfo(nil)
                 camera.disconnect()

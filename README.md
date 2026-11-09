@@ -9,11 +9,15 @@ The app pushes frames into the extension's sink stream; while no frames arrive t
 
 The menu also offers a floating **preview window** (⌘P) with exposure settings (mode, shutter, aperture, ISO, EV), focus mode, AF status, film simulation, battery, and the current **AF point** drawn over the image.
 
+Exposure controls (menu bar and preview right-click): set the shutter to 2× the frame rate (1/60 s at 30 fps) and pick a fixed ISO. The X-T4's dials take precedence: the shutter dial must be on **T** and the ISO dial on its command position, otherwise the camera keeps its own values and Fujiyoshida says so.
+
 ## Camera setup (X-T4)
 
 1. `MENU › SET UP › CONNECTION SETTING › PC CONNECTION MODE` → **USB TETHER SHOOTING AUTO**
-2. Set auto power-off to OFF and preferably power the camera via USB-C PD or a dummy battery.
-3. Connect via USB-C.
+2. STILL/MOVIE lever (under the shutter dial) on **STILL**, drive mode on a still mode (e.g. S). In movie mode the camera hides most properties over USB and refuses live view.
+3. Close camera menus and playback; the camera answers "busy" while they are open.
+4. Set auto power-off to OFF and preferably power the camera via USB-C PD or a dummy battery.
+5. Connect via USB-C.
 
 ## Build & install
 
