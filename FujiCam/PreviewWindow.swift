@@ -22,7 +22,16 @@ struct PreviewWindow: View {
                     }
                 }
             CameraInfoBar(info: capture.info)
+            if let message = capture.message {
+                Text(message)
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.bar)
+            }
         }
+        .contextMenu { ExposureMenu(capture: capture) }
         .frame(minWidth: 320, idealWidth: 400)
         .onAppear { capture.preview.isActive = true }
         .onDisappear { capture.preview.isActive = false }

@@ -50,7 +50,12 @@ private struct MenuContent: View {
         if let info = capture.info {
             Text(info.exposureSummary)
         }
+        if let message = capture.message {
+            Text(message)
+        }
         Text(installer.status)
+        Divider()
+        ExposureMenu(capture: capture)
         Divider()
         Button("Show Preview") {
             openWindow(id: "preview")
@@ -66,6 +71,25 @@ private struct MenuContent: View {
         Divider()
         Button("Quit FujiCam") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+}
+
+struct ExposureMenu: View {
+    @ObservedObject var capture: CaptureController
+
+    var body: some View {
+        Button("Shutter \(CaptureController.shutterForFrameRate) (2× frame rate)") {
+            capture.setShutterForFrameRate()
+        }
+        .disabled(!capture.isStreaming)
+        Menu("ISO") {
+            Button("Auto") { capture.setISO("-1") }
+            Divider()
+            ForEach(capture.isoChoices, id: \.self) { value in
+                Button(value) { capture.setISO(value) }
+            }
+        }
+        .disabled(!capture.isStreaming || capture.isoChoices.isEmpty)
     }
 }
 

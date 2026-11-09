@@ -91,6 +91,28 @@ final class FujiCamera {
         return values
     }
 
+    func writeSetting(_ name: String, value: String) throws {
+        guard let camera else { throw GPhotoError(code: GP_ERROR_CAMERA_ERROR, operation: "Setting \(name)") }
+        var widget: OpaquePointer?
+        try check(gp_camera_get_single_config(camera, name, &widget, context), "Reading \(name)")
+        guard let widget else { throw GPhotoError(code: GP_ERROR_CAMERA_ERROR, operation: "Reading \(name)") }
+        defer { gp_widget_free(widget) }
+        try value.withCString { try check(gp_widget_set_value(widget, $0), "Setting \(name)") }
+        try check(gp_camera_set_single_config(camera, name, widget, context), "Setting \(name)")
+    }
+
+    func choices(for name: String) -> [String] {
+        guard let camera else { return [] }
+        var widget: OpaquePointer?
+        guard gp_camera_get_single_config(camera, name, &widget, context) >= GP_OK, let widget else { return [] }
+        defer { gp_widget_free(widget) }
+        return (0..<max(gp_widget_count_choices(widget), 0)).compactMap { index in
+            var choice: UnsafePointer<CChar>?
+            guard gp_widget_get_choice(widget, index, &choice) >= GP_OK, let choice else { return nil }
+            return String(cString: choice)
+        }
+    }
+
     func readPropertyString(_ code: UInt16) -> String? {
         readRawProperty(code).flatMap(Self.decodePTPString)
     }

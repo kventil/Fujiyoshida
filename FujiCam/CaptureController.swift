@@ -6,6 +6,70 @@ final class CaptureController: ObservableObject {
     @Published private(set) var isStreaming = false
     @Published private(set) var info: CameraInfo?
     @Published private(set) var visibleRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
+    @Published private(set) var isoChoices: [String] = []
+    @Published private(set) var message: String?
+
+    static var shutterForFrameRate: String { "1/\(Int(FujiCamConfig.frameRate) * 2)" }
+
+    private var pendingSettings: [(name: String, value: String)] = []
+
+    func setShutterForFrameRate() {
+        enqueueSetting("shutterspeed", value: Self.shutterForFrameRate)
+    }
+
+    func setISO(_ value: String) {
+        enqueueSetting("iso", value: value)
+    }
+
+    private func enqueueSetting(_ name: String, value: String) {
+        lock.lock(); pendingSettings.append((name, value)); lock.unlock()
+    }
+
+    private func takePendingSettings() -> [(name: String, value: String)] {
+        lock.lock(); defer { lock.unlock() }
+        let settings = pendingSettings
+        pendingSettings.removeAll()
+        return settings
+    }
+
+    private func applyPendingSettings(on camera: FujiCamera) {
+        for setting in takePendingSettings() {
+            let label = setting.name == "iso" ? "ISO \(Self.isoLabel(setting.value))" : "Shutter \(setting.value)"
+            do {
+                try camera.writeSetting(setting.name, value: setting.value)
+                let actual = camera.readSettings([setting.name])[setting.name]
+                if actual == setting.value {
+                    showMessage("\(label) set")
+                } else {
+                    showMessage(Self.rejectionHint(for: setting.name, label: label))
+                }
+            } catch {
+                showMessage(Self.rejectionHint(for: setting.name, label: label))
+            }
+        }
+    }
+
+    static func isoLabel(_ value: String) -> String {
+        guard let number = Int(value) else { return value }
+        return number < 0 ? "Auto" : value
+    }
+
+    private static func rejectionHint(for name: String, label: String) -> String {
+        switch name {
+        case "shutterspeed": return "Camera kept its shutter – turn the shutter dial to T to control it from FujiCam"
+        case "iso": return "Camera kept its ISO – set the ISO dial to its command position to control it from FujiCam"
+        default: return "Camera rejected \(label)"
+        }
+    }
+
+    private func showMessage(_ text: String) {
+        DispatchQueue.main.async {
+            self.message = text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                if self.message == text { self.message = nil }
+            }
+        }
+    }
 
     let preview = PreviewSurface()
 
@@ -86,6 +150,8 @@ final class CaptureController: ObservableObject {
                 do {
                     try camera.connect()
                     publish("Connected to \(camera.modelName)", streaming: false)
+                    let isoChoices = camera.choices(for: "iso").filter { (Int($0) ?? 0) > 0 }
+                    DispatchQueue.main.async { self.isoChoices = isoChoices }
                 } catch {
                     publish("No camera found – USB connection mode must be “USB Tether Shooting”", streaming: false)
                     pause(2)
@@ -109,6 +175,8 @@ final class CaptureController: ObservableObject {
                         decodeSlots.signal()
                     }
                 }
+
+                applyPendingSettings(on: camera)
 
                 if Date().timeIntervalSince(lastInfoRead) >= 0.25 {
                     lastInfoRead = Date()
