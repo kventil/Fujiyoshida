@@ -2,14 +2,20 @@ import SwiftUI
 
 struct PreviewWindow: View {
     @ObservedObject var capture: CaptureController
+    @ObservedObject var live: LiveStats
+
+    init(capture: CaptureController) {
+        self.capture = capture
+        self.live = capture.live
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             PreviewLayerView(surface: capture.preview)
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
-                    if capture.isStreaming, let info = capture.info, let point = info.focusPoint {
-                        FocusBox(point: point, state: info.focusState, region: capture.visibleRegion)
+                    if capture.isStreaming, let info = live.info, let point = info.focusPoint {
+                        FocusBox(point: point, state: info.focusState, region: live.visibleRegion)
                     }
                 }
                 .overlay(alignment: .center) {
@@ -21,7 +27,7 @@ struct PreviewWindow: View {
                             .padding()
                     }
                 }
-            CameraInfoBar(info: capture.info)
+            CameraInfoBar(info: live.info, rate: live.rate)
             if let message = capture.message {
                 Text(message)
                     .font(.caption)
@@ -40,6 +46,7 @@ struct PreviewWindow: View {
 
 private struct CameraInfoBar: View {
     let info: CameraInfo?
+    let rate: String
 
     var body: some View {
         if let info {
@@ -62,10 +69,12 @@ private struct CameraInfoBar: View {
                     }
                 }
                 .foregroundStyle(.secondary)
-                if !info.lens.isEmpty {
+                HStack {
                     Text(info.lens)
-                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(rate)
                 }
+                .foregroundStyle(.secondary)
             }
             .font(.caption)
             .padding(10)

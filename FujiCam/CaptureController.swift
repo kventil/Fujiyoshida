@@ -1,11 +1,16 @@
 import Foundation
 
+final class LiveStats: ObservableObject {
+    @Published fileprivate(set) var info: CameraInfo?
+    @Published fileprivate(set) var visibleRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
+    @Published fileprivate(set) var rate = ""
+}
+
 final class CaptureController: ObservableObject {
     @Published private(set) var status = "Idle"
     @Published private(set) var isRunning = false
     @Published private(set) var isStreaming = false
-    @Published private(set) var info: CameraInfo?
-    @Published private(set) var visibleRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
+    let live = LiveStats()
     @Published private(set) var isoChoices: [String] = []
     @Published private(set) var message: String?
 
@@ -110,15 +115,22 @@ final class CaptureController: ObservableObject {
 
     private func publish(_ status: String, streaming: Bool) {
         DispatchQueue.main.async {
-            self.status = status
-            self.isStreaming = streaming
+            if self.status != status { self.status = status }
+            if self.isStreaming != streaming { self.isStreaming = streaming }
+            if !streaming, !self.live.rate.isEmpty { self.live.rate = "" }
+        }
+    }
+
+    private func publishRate(_ rate: String) {
+        DispatchQueue.main.async {
+            if self.live.rate != rate { self.live.rate = rate }
         }
     }
 
     private func publishInfo(_ info: CameraInfo?, region: CGRect? = nil) {
         DispatchQueue.main.async {
-            if self.info != info { self.info = info }
-            if let region, self.visibleRegion != region { self.visibleRegion = region }
+            if self.live.info != info { self.live.info = info }
+            if let region, self.live.visibleRegion != region { self.live.visibleRegion = region }
         }
     }
 
@@ -190,7 +202,8 @@ final class CaptureController: ObservableObject {
                 if elapsed >= 1 {
                     let fps = Int((Double(frameCount) / elapsed).rounded())
                     let perFrame = Int((cameraTime / Double(frameCount) * 1000).rounded())
-                    publish("\(camera.modelName) · \(fps) fps · \(perFrame) ms/frame", streaming: true)
+                    publish("Streaming from \(camera.modelName)", streaming: true)
+                    publishRate("\(fps) fps · \(perFrame) ms/frame")
                     frameCount = 0
                     cameraTime = 0
                     windowStart = Date()
@@ -211,7 +224,8 @@ final class CaptureController: ObservableObject {
             self.thread = nil
             self.isRunning = false
             self.isStreaming = false
-            self.info = nil
+            self.live.info = nil
+            self.live.rate = ""
             self.status = "Stopped"
         }
     }
