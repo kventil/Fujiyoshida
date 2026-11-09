@@ -1,0 +1,7 @@
+build/
+DerivedData/
+*.xcodeproj/
+xcuserdata/
+.DS_Store
+.claude/settings.local.json
+vendor/

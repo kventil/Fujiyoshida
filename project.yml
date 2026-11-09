@@ -1,0 +1,51 @@
+name: FujiCam
+options:
+  bundleIdPrefix: com.robertbahmann
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: 5YRLS5Z638
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  FujiCam:
+    type: application
+    platform: macOS
+    sources:
+      - FujiCam
+      - Shared
+    dependencies:
+      - target: CameraExtension
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.FujiCam
+        INFOPLIST_FILE: FujiCam/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FujiCam/FujiCam.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: FujiCam/FujiCam-Bridging-Header.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/vendor/gphoto2/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/vendor/gphoto2/lib"
+        OTHER_LDFLAGS: -lgphoto2 -lgphoto2_port
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: Bundle libgphoto2
+        script: '"$SRCROOT/scripts/bundle-gphoto2.sh"'
+        basedOnDependencyAnalysis: false
+  CameraExtension:
+    type: system-extension
+    platform: macOS
+    sources:
+      - CameraExtension
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.FujiCam.CameraExtension
+        PRODUCT_NAME: com.robertbahmann.FujiCam.CameraExtension
+        INFOPLIST_FILE: CameraExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CameraExtension/CameraExtension.entitlements
+        SKIP_INSTALL: YES
