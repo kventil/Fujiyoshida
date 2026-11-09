@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>FujiCam Camera Extension</string>
+	<string>Fujiyoshida Camera Extension</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -28,6 +28,6 @@
 		<string>$(TeamIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	</dict>
 	<key>NSSystemExtensionUsageDescription</key>
-	<string>Provides the FujiCam virtual camera.</string>
+	<string>Provides the Fujiyoshida virtual camera.</string>
 </dict>
 </plist>

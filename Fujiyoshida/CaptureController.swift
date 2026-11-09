@@ -14,7 +14,7 @@ final class CaptureController: ObservableObject {
     @Published private(set) var isoChoices: [String] = []
     @Published private(set) var message: String?
 
-    static var shutterForFrameRate: String { "1/\(Int(FujiCamConfig.frameRate) * 2)" }
+    static var shutterForFrameRate: String { "1/\(Int(FujiyoshidaConfig.frameRate) * 2)" }
 
     private var pendingSettings: [(name: String, value: String)] = []
 
@@ -61,8 +61,8 @@ final class CaptureController: ObservableObject {
 
     private static func rejectionHint(for name: String, label: String) -> String {
         switch name {
-        case "shutterspeed": return "Camera kept its shutter – turn the shutter dial to T to control it from FujiCam"
-        case "iso": return "Camera kept its ISO – set the ISO dial to its command position to control it from FujiCam"
+        case "shutterspeed": return "Camera kept its shutter – turn the shutter dial to T to control it from Fujiyoshida"
+        case "iso": return "Camera kept its ISO – set the ISO dial to its command position to control it from Fujiyoshida"
         default: return "Camera rejected \(label)"
         }
     }
@@ -88,7 +88,7 @@ final class CaptureController: ObservableObject {
         setStopRequested(false)
         isRunning = true
         let thread = Thread { [weak self] in self?.run() }
-        thread.name = "FujiCam capture"
+        thread.name = "Fujiyoshida capture"
         thread.qualityOfService = .userInteractive
         self.thread = thread
         thread.start()
@@ -143,7 +143,7 @@ final class CaptureController: ObservableObject {
         let camera = FujiCamera()
         let converter = FrameConverter()
         let sink = SinkFeeder()
-        let decodeQueue = DispatchQueue(label: "fujicam.decode", qos: .userInteractive)
+        let decodeQueue = DispatchQueue(label: "fujiyoshida.decode", qos: .userInteractive)
         let decodeSlots = DispatchSemaphore(value: 2)
         var frameCount = 0
         var cameraTime: TimeInterval = 0

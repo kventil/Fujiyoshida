@@ -5,12 +5,12 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     @Published private(set) var status = "Camera extension: unknown"
 
     func activate() {
-        submit(.activationRequest(forExtensionWithIdentifier: FujiCamConfig.extensionBundleID, queue: .main))
+        submit(.activationRequest(forExtensionWithIdentifier: FujiyoshidaConfig.extensionBundleID, queue: .main))
         status = "Camera extension: installing…"
     }
 
     func deactivate() {
-        submit(.deactivationRequest(forExtensionWithIdentifier: FujiCamConfig.extensionBundleID, queue: .main))
+        submit(.deactivationRequest(forExtensionWithIdentifier: FujiyoshidaConfig.extensionBundleID, queue: .main))
         status = "Camera extension: removing…"
     }
 

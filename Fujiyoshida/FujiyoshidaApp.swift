@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct FujiCamApp: App {
+struct FujiyoshidaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var installer = ExtensionInstaller()
 
@@ -30,7 +30,7 @@ struct FujiCamApp: App {
             MenuIcon(capture: appDelegate.capture, installer: installer)
         }
 
-        Window("FujiCam Preview", id: "preview") {
+        Window("Fujiyoshida Preview", id: "preview") {
             PreviewWindow(capture: appDelegate.capture)
         }
         .windowLevel(.floating)
@@ -66,7 +66,7 @@ private struct MenuContent: View {
         Button("Install Camera Extension") { installer.activate() }
         Button("Uninstall Camera Extension") { installer.deactivate() }
         Divider()
-        Button("Quit FujiCam") { NSApp.terminate(nil) }
+        Button("Quit Fujiyoshida") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 }

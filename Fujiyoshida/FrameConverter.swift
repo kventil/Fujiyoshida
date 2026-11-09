@@ -4,8 +4,8 @@ import CoreVideo
 final class FrameConverter {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private var pool: CVPixelBufferPool?
-    private let width = CGFloat(FujiCamConfig.width)
-    private let height = CGFloat(FujiCamConfig.height)
+    private let width = CGFloat(FujiyoshidaConfig.width)
+    private let height = CGFloat(FujiyoshidaConfig.height)
     private let regionLock = NSLock()
     private var region = CGRect(x: 0, y: 0, width: 1, height: 1)
 
@@ -16,9 +16,9 @@ final class FrameConverter {
 
     init() {
         let attributes: [CFString: Any] = [
-            kCVPixelBufferPixelFormatTypeKey: FujiCamConfig.pixelFormat,
-            kCVPixelBufferWidthKey: Int(FujiCamConfig.width),
-            kCVPixelBufferHeightKey: Int(FujiCamConfig.height),
+            kCVPixelBufferPixelFormatTypeKey: FujiyoshidaConfig.pixelFormat,
+            kCVPixelBufferWidthKey: Int(FujiyoshidaConfig.width),
+            kCVPixelBufferHeightKey: Int(FujiyoshidaConfig.height),
             kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
         ]
         CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &pool)

@@ -10,7 +10,7 @@ final class SinkFeeder {
 
     func connect() -> Bool {
         if queue != nil { return true }
-        guard let device = Self.findDevice(uid: FujiCamConfig.deviceUID),
+        guard let device = Self.findDevice(uid: FujiyoshidaConfig.deviceUID),
               let stream = Self.sinkStream(of: device) else { return false }
 
         var unmanagedQueue: Unmanaged<CMSimpleQueue>?
@@ -38,7 +38,7 @@ final class SinkFeeder {
         guard let format else { return }
 
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: FujiCamConfig.frameRate),
+            duration: CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate),
             presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
             decodeTimeStamp: .invalid
         )

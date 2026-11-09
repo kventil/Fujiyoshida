@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>$(TeamIdentifierPrefix)com.robertbahmann.FujiCam</string>
+		<string>$(TeamIdentifierPrefix)com.robertbahmann.Fujiyoshida</string>
 	</array>
 </dict>
 </plist>

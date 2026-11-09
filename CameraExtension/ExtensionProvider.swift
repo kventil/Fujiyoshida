@@ -4,14 +4,14 @@ import Foundation
 import IOKit.audio
 import os.log
 
-private let log = Logger(subsystem: FujiCamConfig.extensionBundleID, category: "extension")
+private let log = Logger(subsystem: FujiyoshidaConfig.extensionBundleID, category: "extension")
 
 final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
     private(set) var device: CMIOExtensionDevice!
     private var sourceStream: ExtensionSourceStream!
     private var sinkStream: ExtensionSinkStream!
 
-    private let queue = DispatchQueue(label: "fujicam.extension.timer", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "fujiyoshida.extension.timer", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var sourceActive = false
     private var sinkClient: CMIOExtensionClient?
@@ -23,9 +23,9 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         var description: CMFormatDescription?
         CMVideoFormatDescriptionCreate(
             allocator: kCFAllocatorDefault,
-            codecType: FujiCamConfig.pixelFormat,
-            width: FujiCamConfig.width,
-            height: FujiCamConfig.height,
+            codecType: FujiyoshidaConfig.pixelFormat,
+            width: FujiyoshidaConfig.width,
+            height: FujiyoshidaConfig.height,
             extensions: nil,
             formatDescriptionOut: &description
         )
@@ -34,12 +34,12 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
 
         device = CMIOExtensionDevice(
             localizedName: localizedName,
-            deviceID: UUID(uuidString: FujiCamConfig.deviceUID)!,
-            legacyDeviceID: FujiCamConfig.deviceUID,
+            deviceID: UUID(uuidString: FujiyoshidaConfig.deviceUID)!,
+            legacyDeviceID: FujiyoshidaConfig.deviceUID,
             source: self
         )
 
-        let frameDuration = CMTime(value: 1, timescale: FujiCamConfig.frameRate)
+        let frameDuration = CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate)
         let format = CMIOExtensionStreamFormat(
             formatDescription: videoDescription,
             maxFrameDuration: frameDuration,
@@ -49,13 +49,13 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
 
         sourceStream = ExtensionSourceStream(
             localizedName: "\(localizedName) Video",
-            streamID: UUID(uuidString: FujiCamConfig.sourceStreamUID)!,
+            streamID: UUID(uuidString: FujiyoshidaConfig.sourceStreamUID)!,
             format: format,
             device: self
         )
         sinkStream = ExtensionSinkStream(
             localizedName: "\(localizedName) Sink",
-            streamID: UUID(uuidString: FujiCamConfig.sinkStreamUID)!,
+            streamID: UUID(uuidString: FujiyoshidaConfig.sinkStreamUID)!,
             format: format,
             device: self
         )
@@ -78,7 +78,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
             deviceProperties.transportType = kIOAudioDeviceTransportTypeVirtual
         }
         if properties.contains(.deviceModel) {
-            deviceProperties.model = "FujiCam"
+            deviceProperties.model = "Fujiyoshida"
         }
         return deviceProperties
     }
@@ -115,7 +115,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
 
     private func startTimerIfNeeded() {
         guard timer == nil else { return }
-        let interval = 1.0 / Double(FujiCamConfig.frameRate)
+        let interval = 1.0 / Double(FujiyoshidaConfig.frameRate)
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
         timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(2))
         timer.setEventHandler { [weak self] in self?.tick() }
@@ -160,7 +160,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         }
         guard let placeholder, let image = CMSampleBufferGetImageBuffer(placeholder) else { return nil }
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: FujiCamConfig.frameRate),
+            duration: CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate),
             presentationTimeStamp: time,
             decodeTimeStamp: .invalid
         )
@@ -184,9 +184,9 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         var pixelBuffer: CVPixelBuffer?
         CVPixelBufferCreate(
             kCFAllocatorDefault,
-            Int(FujiCamConfig.width),
-            Int(FujiCamConfig.height),
-            FujiCamConfig.pixelFormat,
+            Int(FujiyoshidaConfig.width),
+            Int(FujiyoshidaConfig.height),
+            FujiyoshidaConfig.pixelFormat,
             attributes as CFDictionary,
             &pixelBuffer
         )
@@ -224,7 +224,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         CTLineDraw(line, context)
 
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: FujiCamConfig.frameRate),
+            duration: CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate),
             presentationTimeStamp: .zero,
             decodeTimeStamp: .invalid
         )
@@ -270,7 +270,7 @@ final class ExtensionSourceStream: NSObject, CMIOExtensionStreamSource {
             streamProperties.activeFormatIndex = 0
         }
         if properties.contains(.streamFrameDuration) {
-            streamProperties.frameDuration = CMTime(value: 1, timescale: FujiCamConfig.frameRate)
+            streamProperties.frameDuration = CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate)
         }
         return streamProperties
     }
@@ -322,7 +322,7 @@ final class ExtensionSinkStream: NSObject, CMIOExtensionStreamSource {
             streamProperties.activeFormatIndex = 0
         }
         if properties.contains(.streamFrameDuration) {
-            streamProperties.frameDuration = CMTime(value: 1, timescale: FujiCamConfig.frameRate)
+            streamProperties.frameDuration = CMTime(value: 1, timescale: FujiyoshidaConfig.frameRate)
         }
         if properties.contains(.streamSinkBufferQueueSize) {
             streamProperties.sinkBufferQueueSize = 1
@@ -341,7 +341,7 @@ final class ExtensionSinkStream: NSObject, CMIOExtensionStreamSource {
     }
 
     func startStream() throws {
-        guard let client else { throw NSError(domain: "FujiCam", code: 1) }
+        guard let client else { throw NSError(domain: "Fujiyoshida", code: 1) }
         log.info("Sink stream started")
         device.startSinkStreaming(client: client)
     }
@@ -359,7 +359,7 @@ final class ExtensionProviderSource: NSObject, CMIOExtensionProviderSource {
     init(clientQueue: DispatchQueue?) {
         super.init()
         provider = CMIOExtensionProvider(source: self, clientQueue: clientQueue)
-        deviceSource = ExtensionDeviceSource(localizedName: FujiCamConfig.deviceName)
+        deviceSource = ExtensionDeviceSource(localizedName: FujiyoshidaConfig.deviceName)
         do {
             try provider.addDevice(deviceSource.device)
         } catch {
@@ -378,7 +378,7 @@ final class ExtensionProviderSource: NSObject, CMIOExtensionProviderSource {
     func providerProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionProviderProperties {
         let providerProperties = CMIOExtensionProviderProperties(dictionary: [:])
         if properties.contains(.providerManufacturer) {
-            providerProperties.manufacturer = "FujiCam"
+            providerProperties.manufacturer = "Fujiyoshida"
         }
         return providerProperties
     }

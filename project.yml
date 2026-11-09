@@ -1,4 +1,4 @@
-name: FujiCam
+name: Fujiyoshida
 options:
   bundleIdPrefix: com.robertbahmann
   deploymentTarget:
@@ -13,21 +13,21 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_HARDENED_RUNTIME: NO
 targets:
-  FujiCam:
+  Fujiyoshida:
     type: application
     platform: macOS
     sources:
-      - FujiCam
+      - Fujiyoshida
       - Shared
     dependencies:
       - target: CameraExtension
         embed: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.FujiCam
-        INFOPLIST_FILE: FujiCam/Info.plist
-        CODE_SIGN_ENTITLEMENTS: FujiCam/FujiCam.entitlements
-        SWIFT_OBJC_BRIDGING_HEADER: FujiCam/FujiCam-Bridging-Header.h
+        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.Fujiyoshida
+        INFOPLIST_FILE: Fujiyoshida/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Fujiyoshida/Fujiyoshida.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: Fujiyoshida/Fujiyoshida-Bridging-Header.h
         HEADER_SEARCH_PATHS: "$(SRCROOT)/vendor/gphoto2/include"
         LIBRARY_SEARCH_PATHS: "$(SRCROOT)/vendor/gphoto2/lib"
         OTHER_LDFLAGS: -lgphoto2 -lgphoto2_port
@@ -44,8 +44,8 @@ targets:
       - Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.FujiCam.CameraExtension
-        PRODUCT_NAME: com.robertbahmann.FujiCam.CameraExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.Fujiyoshida.CameraExtension
+        PRODUCT_NAME: com.robertbahmann.Fujiyoshida.CameraExtension
         INFOPLIST_FILE: CameraExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: CameraExtension/CameraExtension.entitlements
         SKIP_INSTALL: YES
