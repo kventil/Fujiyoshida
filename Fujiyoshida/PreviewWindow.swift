@@ -18,24 +18,24 @@ struct PreviewWindow: View {
                         FocusBox(point: point, state: info.focusState, region: live.visibleRegion)
                     }
                 }
-                .overlay(alignment: .center) {
+                .overlay {
                     if !capture.isStreaming {
-                        Text(capture.status)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding()
+                        NoPictureView(status: capture.status)
                     }
                 }
-            CameraInfoBar(info: live.info, rate: live.rate)
-            if let message = capture.message {
-                Text(message)
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.bar)
-            }
+                .overlay(alignment: .bottom) {
+                    if let message = live.message {
+                        Text(message)
+                            .font(.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(8)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: live.message)
+            CameraInfoBar(info: capture.isStreaming ? live.info : nil, rate: live.rate)
         }
         .contextMenu { ExposureMenu(capture: capture) }
         .frame(minWidth: 320, idealWidth: 400)
@@ -44,43 +44,60 @@ struct PreviewWindow: View {
     }
 }
 
+private struct NoPictureView: View {
+    let status: String
+
+    var body: some View {
+        ZStack {
+            Color.black
+            VStack(spacing: 10) {
+                Image(systemName: "camera.badge.ellipsis")
+                    .font(.system(size: 32))
+                Text(status)
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
+            .foregroundStyle(.secondary)
+            .padding()
+        }
+    }
+}
+
 private struct CameraInfoBar: View {
     let info: CameraInfo?
     let rate: String
 
     var body: some View {
-        if let info {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(info.exposureSummary)
-                    .font(.system(.body, design: .monospaced).weight(.medium))
-                HStack(spacing: 6) {
-                    FocusIndicator(state: info.focusState)
-                    Text(info.focusSummary)
-                    Spacer()
-                    if !info.battery.isEmpty {
-                        Label(info.battery, systemImage: "battery.75percent")
-                    }
-                }
-                HStack {
-                    Text(info.styleSummary)
-                    Spacer()
-                    if !info.shotsRemaining.isEmpty {
-                        Text("\(info.shotsRemaining) shots")
-                    }
-                }
-                .foregroundStyle(.secondary)
-                HStack {
-                    Text(info.lens)
-                    Spacer()
-                    Text(rate)
-                }
-                .foregroundStyle(.secondary)
+        let shown = info ?? .placeholder
+        VStack(alignment: .leading, spacing: 4) {
+            Text(shown.exposureSummary)
+                .font(.system(.body, design: .monospaced).weight(.medium))
+            HStack(spacing: 6) {
+                FocusIndicator(state: shown.focusState)
+                Text(shown.focusSummary)
+                Spacer()
+                Label(shown.battery, systemImage: "battery.75percent")
             }
-            .font(.caption)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.bar)
+            HStack {
+                Text(shown.styleSummary)
+                Spacer()
+                Text("\(shown.shotsRemaining) shots")
+            }
+            .foregroundStyle(.secondary)
+            HStack {
+                Text(shown.lens)
+                Spacer()
+                Text(info == nil ? "–" : rate)
+            }
+            .foregroundStyle(.secondary)
         }
+        .lineLimit(1)
+        .font(.caption)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .opacity(info == nil ? 0.5 : 1)
     }
 }
 

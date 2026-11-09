@@ -50,6 +50,20 @@ struct CameraInfo: Equatable {
 
     init() {}
 
+    static let placeholder: CameraInfo = {
+        var info = CameraInfo()
+        info.exposureMode = "–"
+        info.shutterSpeed = "–"
+        info.aperture = "–"
+        info.iso = "–"
+        info.focusMode = "–"
+        info.filmSimulation = "–"
+        info.battery = "–"
+        info.shotsRemaining = "–"
+        info.lens = "No camera"
+        return info
+    }()
+
     init(settings: [String: String]) {
         exposureMode = settings["expprogram"] ?? ""
         shutterSpeed = settings["shutterspeed"] ?? ""

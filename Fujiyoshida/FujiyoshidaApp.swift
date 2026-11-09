@@ -47,9 +47,6 @@ private struct MenuContent: View {
 
     var body: some View {
         Text(capture.status)
-        if let message = capture.message {
-            Text(message)
-        }
         Text(installer.status)
         Divider()
         ExposureMenu(capture: capture)

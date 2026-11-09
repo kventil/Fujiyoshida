@@ -4,6 +4,7 @@ final class LiveStats: ObservableObject {
     @Published fileprivate(set) var info: CameraInfo?
     @Published fileprivate(set) var visibleRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
     @Published fileprivate(set) var rate = ""
+    @Published fileprivate(set) var message: String?
 }
 
 final class CaptureController: ObservableObject {
@@ -12,7 +13,6 @@ final class CaptureController: ObservableObject {
     @Published private(set) var isStreaming = false
     let live = LiveStats()
     @Published private(set) var isoChoices: [String] = []
-    @Published private(set) var message: String?
 
     static var shutterForFrameRate: String { "1/\(Int(FujiyoshidaConfig.frameRate) * 2)" }
 
@@ -69,12 +69,15 @@ final class CaptureController: ObservableObject {
 
     private func showMessage(_ text: String) {
         DispatchQueue.main.async {
-            self.message = text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
-                if self.message == text { self.message = nil }
+            self.live.message = text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if self.live.message == text { self.live.message = nil }
             }
         }
     }
+
+    private static let noCameraStatus = "No camera – connect the X-T4 in USB Tether Shooting mode"
+    private static let stuckCameraStatus = "Camera not sending live view – close camera menus or switch it off and on"
 
     let preview = PreviewSurface()
 
@@ -149,6 +152,7 @@ final class CaptureController: ObservableObject {
         var cameraTime: TimeInterval = 0
         var windowStart = Date()
         var lastInfoRead = Date.distantPast
+        var failures = 1
         let preview = self.preview
 
         while !shouldStop {
@@ -161,11 +165,11 @@ final class CaptureController: ObservableObject {
             if !camera.isConnected {
                 do {
                     try camera.connect()
-                    publish("Connected to \(camera.modelName)", streaming: false)
+                    if failures == 0 { publish("Connecting to \(camera.modelName)…", streaming: false) }
                     let isoChoices = camera.choices(for: "iso").filter { (Int($0) ?? 0) > 0 }
-                    DispatchQueue.main.async { self.isoChoices = isoChoices }
+                    DispatchQueue.main.async { if self.isoChoices != isoChoices { self.isoChoices = isoChoices } }
                 } catch {
-                    publish("No camera found – USB connection mode must be “USB Tether Shooting”", streaming: false)
+                    publish(Self.noCameraStatus, streaming: false)
                     pause(2)
                     continue
                 }
@@ -175,6 +179,10 @@ final class CaptureController: ObservableObject {
                 let requested = Date()
                 let jpeg = try autoreleasepool { try camera.capturePreview() }
                 cameraTime += Date().timeIntervalSince(requested)
+                if failures > 0 {
+                    failures = 0
+                    publish("Streaming from \(camera.modelName)", streaming: true)
+                }
 
                 if decodeSlots.wait(timeout: .now()) == .success {
                     decodeQueue.async {
@@ -209,10 +217,11 @@ final class CaptureController: ObservableObject {
                     windowStart = Date()
                 }
             } catch {
-                publish(error.localizedDescription, streaming: false)
+                failures += 1
+                publish(Self.stuckCameraStatus, streaming: false)
                 publishInfo(nil)
                 camera.disconnect()
-                pause(1)
+                pause(min(Double(failures), 5))
             }
         }
 
