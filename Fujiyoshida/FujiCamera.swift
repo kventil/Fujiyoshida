@@ -117,6 +117,74 @@ final class FujiCamera {
         readRawProperty(code).flatMap(Self.decodePTPString)
     }
 
+    @discardableResult
+    func writePropertyString(_ code: UInt16, _ value: String) -> Bool {
+        var payload = Data([UInt8(value.utf16.count + 1)])
+        for unit in value.utf16 { payload.append(UInt8(unit & 0xFF)); payload.append(UInt8(unit >> 8)) }
+        payload.append(contentsOf: [0, 0])
+        return writeProperty(code, payload)
+    }
+
+    func readPropertyUInt32(_ code: UInt16) -> UInt32? {
+        guard let data = readRawProperty(code), !data.isEmpty else { return nil }
+        return data.prefix(4).enumerated().reduce(0) { $0 | UInt32($1.element) << (8 * UInt32($1.offset)) }
+    }
+
+    func readPropertyUInt16(_ code: UInt16) -> UInt16? {
+        guard let data = readRawProperty(code), data.count >= 2 else { return nil }
+        return UInt16(data[data.startIndex]) | UInt16(data[data.startIndex + 1]) << 8
+    }
+
+    @discardableResult
+    func writePropertyUInt16(_ code: UInt16, _ value: UInt16) -> Bool {
+        writeProperty(code, Data([UInt8(value & 0xFF), UInt8(value >> 8)]))
+    }
+
+    func readFaceFrames() -> [String] {
+        guard let data = readRawProperty(0xD18A), data.count >= 2 else { return [] }
+        let count = Int(data[data.startIndex]) | Int(data[data.startIndex + 1]) << 8
+        var frames: [String] = []
+        var offset = data.startIndex + 2
+        while frames.count < count, offset < data.endIndex {
+            let length = Int(data[offset])
+            let end = offset + 1 + length * 2
+            guard length > 0, end <= data.endIndex, let text = Self.decodePTPString(data[offset..<end]) else { break }
+            frames.append(text)
+            offset = end
+        }
+        return frames
+    }
+
+    func stopLiveView() {
+        guard let camera else { return }
+        var request: OpaquePointer?
+        guard gp_camera_get_single_config(camera, "opcode", &request, context) >= GP_OK, let request else { return }
+        defer { gp_widget_free(request) }
+        _ = gp_widget_set_value(request, "0x1018")
+        _ = gp_camera_set_single_config(camera, "opcode", request, context)
+    }
+
+    func focusNow() throws {
+        guard let camera else { throw GPhotoError(code: GP_ERROR_CAMERA_ERROR, operation: "Focusing") }
+        var widget: OpaquePointer?
+        try check(gp_camera_get_single_config(camera, "autofocusdrive", &widget, context), "Focusing")
+        guard let widget else { throw GPhotoError(code: GP_ERROR_CAMERA_ERROR, operation: "Focusing") }
+        defer { gp_widget_free(widget) }
+        var on: Int32 = 1
+        try check(gp_widget_set_value(widget, &on), "Focusing")
+        try check(gp_camera_set_single_config(camera, "autofocusdrive", widget, context), "Focusing")
+    }
+
+    private func writeProperty(_ code: UInt16, _ payload: Data) -> Bool {
+        guard let camera else { return false }
+        let hex = payload.map { String(format: "%02x", $0) }.joined()
+        var request: OpaquePointer?
+        guard gp_camera_get_single_config(camera, "opcode", &request, context) >= GP_OK, let request else { return false }
+        defer { gp_widget_free(request) }
+        String(format: "0x1016,0x%04x;", code).appending(hex).withCString { _ = gp_widget_set_value(request, $0) }
+        return gp_camera_set_single_config(camera, "opcode", request, context) >= GP_OK
+    }
+
     private func readRawProperty(_ code: UInt16) -> Data? {
         guard let camera else { return nil }
         var request: OpaquePointer?

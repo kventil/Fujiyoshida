@@ -1,15 +1,77 @@
-# Fujiyoshida
+<p align="center">
+  <img src="docs/screenshots/icon.png" width="128" alt="Fujiyoshida icon">
+</p>
 
-Use a Fujifilm X-T4 (or another gphoto2-supported Fujifilm body) as a macOS webcam.
+<h1 align="center">Fujiyoshida</h1>
 
-- `Fujiyoshida.app` is a menu-bar app that reads the camera's USB live view through libgphoto2.
-- `CameraExtension` is a CoreMediaIO camera extension that shows up as **Fujiyoshida X-T4** in FaceTime, Zoom, Teams, browsers, etc.
+<p align="center">Use a Fujifilm X-T4 as a macOS webcam – at the camera's full 30 fps, with its film simulations, autofocus and face detection.</p>
 
-The app pushes frames into the extension's sink stream; while no frames arrive the camera shows a "Waiting for Fujifilm camera…" placeholder.
+<p align="center">
+  <img src="docs/screenshots/preview.png" width="720" alt="Preview window with focus point and camera info">
+</p>
 
-The menu also offers a floating **preview window** (⌘P) with exposure settings (mode, shutter, aperture, ISO, EV), focus mode, AF status, film simulation, battery, and the current **AF point** drawn over the image.
+Fujifilm's own webcam software for the Mac is no longer maintained. Fujiyoshida is a small, self-built replacement: a menu-bar app that reads the camera's USB live view and a camera extension that shows up as **Fujiyoshida X-T4** in FaceTime, Zoom, Teams, Meet, OBS and every other video app.
 
-Exposure controls (menu bar and preview right-click): set the shutter to 2× the frame rate (1/60 s at 30 fps) and pick a fixed ISO. The X-T4's dials take precedence: the shutter dial must be on **T** and the ISO dial on its command position, otherwise the camera keeps its own values and Fujiyoshida says so.
+## How it works
+
+```
+X-T4 ──USB──▶ Fujiyoshida.app ──frames──▶ Camera extension ──▶ your video app
+              (libgphoto2, settings,       (CoreMediaIO,
+               preview, menu bar)           "Fujiyoshida X-T4")
+```
+
+- **Fujiyoshida.app** talks to the camera through a bundled, slightly patched [libgphoto2](https://github.com/gphoto/libgphoto2), decodes the live view (1024×768 JPEG at ~30 fps) and crops it to 1280×720.
+- **The camera extension** is a CoreMediaIO system extension. The app feeds it frames, and it serves them to any app that opens the camera.
+- **The camera only runs while it's needed.** As long as no app uses Fujiyoshida X-T4 and the preview is closed, the app lets go of the camera – no live view, less heat, less battery drain. Opening the camera in a video app starts it again within about a second.
+
+## Features
+
+### Camera controls in the menu bar
+
+<p>
+  <img src="docs/screenshots/film-simulation.png" width="300" alt="Film simulation menu">
+</p>
+
+- **Film simulations** – all of the camera's looks, from PROVIA and Classic Chrome to ACROS and ETERNA, applied in the camera itself.
+- **White balance** – presets, custom presets or a colour temperature.
+- **Shutter and ISO** – including 1/60 s, twice the frame rate, for natural motion blur. The shutter dial has to be on **T** and the ISO dial on **A**.
+- **Your choices stick.** They are applied every time the camera connects, and the camera gets its own settings back when Fujiyoshida lets go of it. "Camera Setting" leaves a value alone.
+
+<p>
+  <img src="docs/screenshots/white-balance.png" width="300" alt="White balance menu">
+  <img src="docs/screenshots/focus.png" width="300" alt="Focus menu">
+</p>
+
+### Focus
+
+- **Focus Now** (⌘F) triggers the autofocus.
+- **AF mode** (AF-S, AF-C, MF), **AF area** (single point, zone, wide/tracking) and **face/eye detection** from the Focus menu.
+- **Click to focus** – click anywhere in the preview to move the focus point. The camera's joystick is locked while it is tethered, so this is the way to pick a spot.
+
+### Preview window
+
+**Show Preview** (⌘P) opens a small floating window that shows what the camera sees, with:
+
+- the current **focus point** and the **faces** the camera detects, drawn the way the camera draws them,
+- exposure (mode, shutter, aperture, ISO, exposure compensation), AF mode and status, film simulation, white balance, lens,
+- **battery**, or *USB power* / *Charging* when the camera runs on its cable,
+- frame rate and camera latency.
+
+Right-click the preview for the same camera controls as in the menu.
+
+### Portrait mode
+
+<img src="docs/screenshots/portrait.png" width="640" alt="Portrait mode with blurred fill">
+
+Mount the camera on its side and pick **Rotation › Portrait**. The upright picture is centred over a soft, blurred fill instead of being cropped to a sliver. The X-T4 doesn't tell the computer which way it's held, so this is set by hand.
+
+### Status at a glance
+
+<img src="docs/screenshots/status-paused.png" width="400" alt="Status frame shown in the video">
+
+- **In the video:** when there is no picture, the video says why – no camera connected, camera not sending live view, or paused – so the people on your call aren't left looking at a frozen frame.
+- **In the menu bar:** the icon shows the state: streaming, starting, standby, no camera, needs attention, paused. Below 20 % battery it turns into a battery warning with the percentage.
+- **Pause Camera** stops the camera without quitting the app.
 
 ## Camera setup (X-T4)
 
@@ -23,18 +85,21 @@ Exposure controls (menu bar and preview right-click): set the shutter to 2× the
 
 Requires Xcode signed in with your Apple Developer account (Xcode › Settings › Accounts) and Homebrew.
 
-`install.sh` first builds a patched libgphoto2 into `vendor/` (`scripts/build-libgphoto2.sh`). The patch makes libgphoto2's raw `opcode` config return the camera's response, which is needed to read the Fuji focus point (property `0xD347`).
-
 ```sh
 ./scripts/install.sh
 ```
 
-On first launch, approve the extension in **System Settings › General › Login Items & Extensions › Camera Extensions**.
-Then pick **Fujiyoshida X-T4** as camera in your video app. Fujiyoshida.app must be running for live video.
+The script builds a patched libgphoto2 into `vendor/`, builds and signs the app, and installs it to `/Applications`. On first launch, approve the extension in **System Settings › General › Login Items & Extensions › Camera Extensions**, then pick **Fujiyoshida X-T4** as the camera in your video app. Fujiyoshida.app must be running for live video.
+
+The libgphoto2 patch (`scripts/build-libgphoto2.sh`) extends its raw `opcode` config: it returns the camera's response, can send property data and can stop live view. Fujiyoshida needs this for the focus point (`0xD347`/`0xD395`), face frames (`0xD18A`) and for applying settings. After the patch changes, rebuild with `FORCE=1 ./scripts/build-libgphoto2.sh`.
+
+The app icon is generated by `swift scripts/make-icon.swift`.
 
 ## Notes
 
-- macOS's `ptpcamerad` grabs PTP cameras; Fujiyoshida kills it before connecting.
-- Live view is ~1024 px wide at up to ~30 fps (the camera's USB limit), scaled/cropped to 1280×720.
-- libgphoto2 (LGPL-2.1) and its dependencies are bundled into the app at build time (`scripts/bundle-gphoto2.sh`); Homebrew is only needed to build.
-- Quit Fujiyoshida via its menu (or a normal `kill`): it closes the camera's live-view session on exit. A hard kill (`kill -9`) can leave the camera busy until it is power-cycled.
+- **The camera only accepts settings while live view is stopped.** Fujiyoshida pauses live view for a fraction of a second while it applies a change.
+- **After an update to the camera extension,** restart Fujiyoshida once if it keeps saying "Waiting for camera extension…".
+- **macOS's `ptpcamerad` grabs PTP cameras;** Fujiyoshida stops it before connecting.
+- **Quit Fujiyoshida via its menu** (or a normal `kill`). It closes the camera's live-view session on exit. A hard kill (`kill -9`) can leave the camera busy until it is switched off and on.
+- **libgphoto2** (LGPL-2.1) and its dependencies are bundled into the app at build time (`scripts/bundle-gphoto2.sh`). Homebrew is only needed to build.
+- **Not affiliated with Fujifilm.** Fujifilm, X-T4 and the film simulation names are trademarks of FUJIFILM Corporation.

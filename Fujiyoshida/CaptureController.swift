@@ -8,88 +8,53 @@ final class LiveStats: ObservableObject {
 }
 
 final class CaptureController: ObservableObject {
-    @Published private(set) var status = "Idle"
-    @Published private(set) var isRunning = false
-    @Published private(set) var isStreaming = false
+    enum State {
+        case paused, waitingForExtension, standby, noCamera, connecting, streaming, stuck
+    }
+
+    private enum Command {
+        case apply([CameraSetting])
+        case focusArea(String)
+        case focusNow
+    }
+
+    @Published private(set) var status = "Starting…"
+    @Published private(set) var state = State.standby
+    @Published private(set) var isPaused = false
+    @Published private(set) var batteryLevel: Int?
+    @Published private(set) var rotation = UserDefaults.standard.integer(forKey: "rotation")
+    var isBatteryLow: Bool { (batteryLevel ?? 100) < CameraInfo.lowBatteryLevel }
+    @Published private(set) var overrides = CameraSettingsStore.loadOverrides()
+    @Published private(set) var choices = CameraSettingsStore.loadChoices()
+    var isStreaming: Bool { state == .streaming }
+
     let live = LiveStats()
-    @Published private(set) var isoChoices: [String] = []
-
-    static var shutterForFrameRate: String { "1/\(Int(FujiyoshidaConfig.frameRate) * 2)" }
-
-    private var pendingSettings: [(name: String, value: String)] = []
-
-    func setShutterForFrameRate() {
-        enqueueSetting("shutterspeed", value: Self.shutterForFrameRate)
-    }
-
-    func setISO(_ value: String) {
-        enqueueSetting("iso", value: value)
-    }
-
-    private func enqueueSetting(_ name: String, value: String) {
-        lock.lock(); pendingSettings.append((name, value)); lock.unlock()
-    }
-
-    private func takePendingSettings() -> [(name: String, value: String)] {
-        lock.lock(); defer { lock.unlock() }
-        let settings = pendingSettings
-        pendingSettings.removeAll()
-        return settings
-    }
-
-    private func applyPendingSettings(on camera: FujiCamera) {
-        for setting in takePendingSettings() {
-            let label = setting.name == "iso" ? "ISO \(Self.isoLabel(setting.value))" : "Shutter \(setting.value)"
-            do {
-                try camera.writeSetting(setting.name, value: setting.value)
-                let actual = camera.readSettings([setting.name])[setting.name]
-                if actual == setting.value {
-                    showMessage("\(label) set")
-                } else {
-                    showMessage(Self.rejectionHint(for: setting.name, label: label))
-                }
-            } catch {
-                showMessage(Self.rejectionHint(for: setting.name, label: label))
-            }
-        }
-    }
-
-    static func isoLabel(_ value: String) -> String {
-        guard let number = Int(value) else { return value }
-        return number < 0 ? "Auto" : value
-    }
-
-    private static func rejectionHint(for name: String, label: String) -> String {
-        switch name {
-        case "shutterspeed": return "Camera kept its shutter – turn the shutter dial to T to control it from Fujiyoshida"
-        case "iso": return "Camera kept its ISO – set the ISO dial to its command position to control it from Fujiyoshida"
-        default: return "Camera rejected \(label)"
-        }
-    }
-
-    private func showMessage(_ text: String) {
-        DispatchQueue.main.async {
-            self.live.message = text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                if self.live.message == text { self.live.message = nil }
-            }
-        }
-    }
-
-    private static let noCameraStatus = "No camera – connect the X-T4 in USB Tether Shooting mode"
-    private static let stuckCameraStatus = "Camera not sending live view – close camera menus or switch it off and on"
-
     let preview = PreviewSurface()
+
+    private static let focusAreaProperty: UInt16 = 0xD395
+    private static let currentFocusProperty: UInt16 = 0xD347
+    private static let batteryStateProperty: UInt16 = 0xD36A
 
     private let lock = NSLock()
     private var stopRequested = false
+    private var pausedFlag = false
+    private var rotationFlag = UserDefaults.standard.integer(forKey: "rotation")
+    private var commands: [Command] = []
+    private var targetOverrides: [CameraSetting: String] = [:]
     private var thread: Thread?
     private let finished = DispatchSemaphore(value: 0)
 
+    private var backup: [CameraSetting: String] = [:]
+    private var focusBackup: String?
+    private var focusMoved = false
+
+    init() {
+        targetOverrides = overrides
+    }
+
     func start() {
         guard thread == nil else { return }
-        setStopRequested(false)
-        isRunning = true
+        withLock { stopRequested = false }
         let thread = Thread { [weak self] in self?.run() }
         thread.name = "Fujiyoshida capture"
         thread.qualityOfService = .userInteractive
@@ -97,81 +62,128 @@ final class CaptureController: ObservableObject {
         thread.start()
     }
 
-    func stop() {
-        setStopRequested(true)
-    }
-
     func stopAndWait(timeout: TimeInterval = 3) {
         guard thread != nil else { return }
-        setStopRequested(true)
+        withLock { stopRequested = true }
         _ = finished.wait(timeout: .now() + timeout)
     }
 
-    private func setStopRequested(_ value: Bool) {
-        lock.lock(); stopRequested = value; lock.unlock()
+    func setPaused(_ paused: Bool) {
+        isPaused = paused
+        withLock { pausedFlag = paused }
     }
 
-    private var shouldStop: Bool {
+    func value(for setting: CameraSetting) -> String? {
+        overrides[setting]
+    }
+
+    func setOverride(_ setting: CameraSetting, to value: String?) {
+        var changed = [setting]
+        overrides[setting] = value
+        if setting == .whiteBalance, overrides[.colorTemperature] != nil {
+            overrides[.colorTemperature] = nil
+            changed.append(.colorTemperature)
+        }
+        if setting == .colorTemperature {
+            overrides[.whiteBalance] = value == nil ? nil : CameraSetting.colorTemperatureMode
+            changed.insert(.whiteBalance, at: 0)
+        }
+        CameraSettingsStore.save(overrides: overrides)
+        let snapshot = overrides
+        withLock {
+            targetOverrides = snapshot
+            commands.append(.apply(changed))
+        }
+    }
+
+    func setRotation(_ degrees: Int) {
+        rotation = degrees
+        UserDefaults.standard.set(degrees, forKey: "rotation")
+        withLock { rotationFlag = degrees }
+    }
+
+    func setFocusPoint(_ point: CameraInfo.FocusPoint) {
+        withLock {
+            commands.removeAll { if case .focusArea = $0 { return true } else { return false } }
+            commands.append(.focusArea(point.value))
+        }
+    }
+
+    func focusNow() {
+        withLock { commands.append(.focusNow) }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
         lock.lock(); defer { lock.unlock() }
-        return stopRequested
+        return body()
     }
 
-    private func publish(_ status: String, streaming: Bool) {
-        DispatchQueue.main.async {
-            if self.status != status { self.status = status }
-            if self.isStreaming != streaming { self.isStreaming = streaming }
-            if !streaming, !self.live.rate.isEmpty { self.live.rate = "" }
-        }
-    }
-
-    private func publishRate(_ rate: String) {
-        DispatchQueue.main.async {
-            if self.live.rate != rate { self.live.rate = rate }
-        }
-    }
-
-    private func publishInfo(_ info: CameraInfo?, region: CGRect? = nil) {
-        DispatchQueue.main.async {
-            if self.live.info != info { self.live.info = info }
-            if let region, self.live.visibleRegion != region { self.live.visibleRegion = region }
-        }
-    }
-
-    private func pause(_ seconds: TimeInterval) {
-        let deadline = Date().addingTimeInterval(seconds)
-        while !shouldStop, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
-    }
+    private var shouldStop: Bool { withLock { stopRequested } }
 
     private func run() {
         let camera = FujiCamera()
         let converter = FrameConverter()
         let sink = SinkFeeder()
+        let statusFrames = StatusFrameRenderer()
         let decodeQueue = DispatchQueue(label: "fujiyoshida.decode", qos: .userInteractive)
         let decodeSlots = DispatchSemaphore(value: 2)
+        let preview = self.preview
         var frameCount = 0
         var cameraTime: TimeInterval = 0
         var windowStart = Date()
         var lastInfoRead = Date.distantPast
+        var lastFaceRead = Date.distantPast
+        var info = CameraInfo()
+        var lastViewerCheck = Date.distantPast
+        var viewerActive = false
         var failures = 0
         var streaming = false
-        let preview = self.preview
+
+        func idle(_ seconds: TimeInterval, showing frame: StatusFrame? = nil) {
+            let deadline = Date().addingTimeInterval(seconds)
+            repeat {
+                if let frame, viewerActive, let buffer = statusFrames.buffer(for: frame) { sink.send(buffer) }
+                Thread.sleep(forTimeInterval: 0.2)
+            } while !shouldStop && Date() < deadline
+        }
 
         while !shouldStop {
             guard sink.connect() else {
-                publish("Waiting for camera extension…", streaming: false)
-                pause(1)
+                publish("Waiting for camera extension…", state: .waitingForExtension)
+                idle(1)
+                continue
+            }
+
+            if Date().timeIntervalSince(lastViewerCheck) >= 0.5 {
+                lastViewerCheck = Date()
+                viewerActive = sink.isViewerActive()
+            }
+
+            let paused = withLock { pausedFlag }
+            if paused || !(viewerActive || preview.isActive) {
+                if camera.isConnected { endSession(camera) }
+                streaming = false
+                failures = 0
+                publishInfo(nil)
+                if paused {
+                    publish("Paused", state: .paused)
+                    idle(0.4, showing: .paused)
+                } else {
+                    publish("Standby – starts when an app uses the camera", state: .standby)
+                    idle(0.4)
+                }
                 continue
             }
 
             if !camera.isConnected {
+                if failures == 0 { publish("Starting camera…", state: .connecting) }
+                if viewerActive, let buffer = statusFrames.buffer(for: failures == 0 ? .starting : .stuck) { sink.send(buffer) }
                 do {
                     try camera.connect()
-                    if failures == 0 { publish("Connecting to \(camera.modelName)…", streaming: false) }
-                    let isoChoices = camera.choices(for: "iso").filter { (Int($0) ?? 0) > 0 }
-                    DispatchQueue.main.async { if self.isoChoices != isoChoices { self.isoChoices = isoChoices } }
+                    beginSession(camera)
                 } catch {
-                    publish(Self.noCameraStatus, streaming: false)
-                    pause(2)
+                    publish("No camera – connect the X-T4 in USB Tether Shooting mode", state: .noCamera)
+                    idle(2, showing: .noCamera)
                     continue
                 }
             }
@@ -183,13 +195,14 @@ final class CaptureController: ObservableObject {
                 if !streaming {
                     streaming = true
                     failures = 0
-                    publish("Streaming from \(camera.modelName)", streaming: true)
+                    publish("Streaming from \(camera.modelName)", state: .streaming)
                 }
 
                 if decodeSlots.wait(timeout: .now()) == .success {
+                    let rotation = withLock { rotationFlag }
                     decodeQueue.async {
                         autoreleasepool {
-                            if let buffer = converter.pixelBuffer(fromJPEG: jpeg) {
+                            if let buffer = converter.pixelBuffer(fromJPEG: jpeg, rotation: rotation) {
                                 sink.send(buffer)
                                 preview.show(buffer)
                             }
@@ -198,13 +211,24 @@ final class CaptureController: ObservableObject {
                     }
                 }
 
-                applyPendingSettings(on: camera)
+                runCommands(on: camera)
 
                 if Date().timeIntervalSince(lastInfoRead) >= 0.25 {
                     lastInfoRead = Date()
                     var settings = camera.readSettings(CameraInfo.settingNames)
-                    settings[CameraInfo.focusPointKey] = camera.readPropertyString(0xD347)
-                    publishInfo(CameraInfo(settings: settings), region: converter.visibleRegion)
+                    settings[CameraInfo.focusPointKey] = camera.readPropertyString(Self.currentFocusProperty)
+                    info = CameraInfo(settings: settings)
+                    info.power = CameraInfo.Power(code: camera.readPropertyUInt32(Self.batteryStateProperty))
+                    info.detection = CameraInfo.Detection(
+                        face: camera.readPropertyUInt16(FujiCamera.faceDetectionProperty),
+                        eye: camera.readPropertyUInt16(FujiCamera.eyeDetectionProperty)
+                    )
+                }
+                if Date().timeIntervalSince(lastFaceRead) >= 0.1 {
+                    lastFaceRead = Date()
+                    let frameWidth = converter.sourceSize.width
+                    info.faces = info.detection == .off ? [] : camera.readFaceFrames().compactMap { CameraInfo.Face($0, frameWidth: frameWidth) }
+                    publishInfo(info, region: converter.visibleRegion)
                 }
 
                 frameCount += 1
@@ -220,25 +244,126 @@ final class CaptureController: ObservableObject {
             } catch {
                 failures += 1
                 streaming = false
-                publish(Self.stuckCameraStatus, streaming: false)
+                publish("Camera not sending live view – close camera menus or switch it off and on", state: .stuck)
                 publishInfo(nil)
                 camera.disconnect()
-                pause(min(Double(failures), 5))
+                idle(min(Double(failures), 5), showing: .stuck)
             }
         }
 
         decodeQueue.sync {}
-        camera.disconnect()
+        if camera.isConnected { endSession(camera) }
         sink.disconnect()
         finished.signal()
         DispatchQueue.main.async {
             self.thread = nil
-            self.isRunning = false
-            self.isStreaming = false
             self.live.info = nil
             self.live.rate = ""
-            self.status = "Stopped"
         }
     }
 
+    private func beginSession(_ camera: FujiCamera) {
+        let cameraChoices = Dictionary(uniqueKeysWithValues: CameraSetting.allCases.map { ($0, camera.availableValues(for: $0)) })
+            .filter { !$0.value.isEmpty }
+        if !cameraChoices.isEmpty {
+            CameraSettingsStore.save(choices: cameraChoices)
+            DispatchQueue.main.async { if self.choices != cameraChoices { self.choices = cameraChoices } }
+        }
+
+        if backup.isEmpty {
+            backup = Dictionary(uniqueKeysWithValues: CameraSetting.allCases.compactMap { setting in camera.currentValue(of: setting).map { (setting, $0) } })
+            focusBackup = camera.readPropertyString(Self.focusAreaProperty)
+            focusMoved = false
+        }
+
+        let targets = withLock { targetOverrides }
+        apply(CameraSetting.allCases.filter { targets[$0] != nil }, targets: targets, on: camera)
+    }
+
+    private func endSession(_ camera: FujiCamera) {
+        camera.stopLiveView()
+        let targets = withLock { targetOverrides }
+        for setting in CameraSetting.allCases where targets[setting] != nil {
+            if let original = backup[setting] { _ = camera.apply(original, to: setting) }
+        }
+        if focusMoved, let focusBackup { camera.writePropertyString(Self.focusAreaProperty, focusBackup) }
+        backup = [:]
+        focusBackup = nil
+        focusMoved = false
+        camera.disconnect()
+    }
+
+    private func runCommands(on camera: FujiCamera) {
+        let pending: ([Command], [CameraSetting: String]) = withLock {
+            defer { commands.removeAll() }
+            return (commands, targetOverrides)
+        }
+        for command in pending.0 {
+            switch command {
+            case .apply(let settings):
+                camera.stopLiveView()
+                apply(settings, targets: pending.1, on: camera)
+            case .focusArea(let value):
+                focusMoved = true
+                if !writeWithRetry({ camera.writePropertyString(Self.focusAreaProperty, value) }) {
+                    showMessage("Camera kept its focus point")
+                }
+            case .focusNow:
+                do { try camera.focusNow() } catch { showMessage("Camera couldn't focus") }
+            }
+        }
+    }
+
+    private func apply(_ settings: [CameraSetting], targets: [CameraSetting: String], on camera: FujiCamera) {
+        var rejected: CameraSetting?
+        for setting in CameraSetting.allCases where settings.contains(setting) {
+            guard let value = targets[setting] ?? backup[setting] else { continue }
+            let accepted = camera.apply(value, to: setting)
+            if !accepted, targets[setting] != nil, rejected == nil { rejected = setting }
+        }
+        if let rejected { showMessage(rejected.rejectionHint) }
+    }
+
+    private func writeWithRetry(_ write: () -> Bool) -> Bool {
+        for attempt in 0..<5 {
+            if write() { return true }
+            if attempt < 4 { Thread.sleep(forTimeInterval: 0.05) }
+        }
+        return false
+    }
+
+    private func publish(_ status: String, state: State) {
+        DispatchQueue.main.async {
+            if self.status != status { self.status = status }
+            if self.state != state { self.state = state }
+            if state == .noCamera, self.batteryLevel != nil { self.batteryLevel = nil }
+            if state != .streaming, !self.live.rate.isEmpty { self.live.rate = "" }
+        }
+    }
+
+    private func publishRate(_ rate: String) {
+        DispatchQueue.main.async {
+            if self.live.rate != rate { self.live.rate = rate }
+        }
+    }
+
+    private func publishInfo(_ info: CameraInfo?, region: CGRect? = nil) {
+        DispatchQueue.main.async {
+            if self.live.info != info { self.live.info = info }
+            if let info, info.power != .unknown {
+                let level = info.power == .battery ? info.batteryLevel : nil
+                if self.batteryLevel != level { self.batteryLevel = level }
+            }
+            if let region, self.live.visibleRegion != region { self.live.visibleRegion = region }
+        }
+    }
+
+    private func showMessage(_ text: String) {
+        DispatchQueue.main.async {
+            self.live.message = text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if self.live.message == text { self.live.message = nil }
+            }
+        }
+    }
 }

@@ -3,10 +3,12 @@ import SystemExtensions
 
 final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionRequestDelegate {
     @Published private(set) var status = "Camera extension: unknown"
+    @Published private(set) var needsAttention = false
 
     func activate() {
         submit(.activationRequest(forExtensionWithIdentifier: FujiyoshidaConfig.extensionBundleID, queue: .main))
         status = "Camera extension: installing…"
+        needsAttention = false
     }
 
     func deactivate() {
@@ -27,17 +29,24 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         status = "Approve in System Settings › General › Login Items & Extensions"
+        needsAttention = true
     }
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
         switch result {
-        case .completed: status = "Camera extension: ready"
-        case .willCompleteAfterReboot: status = "Camera extension: restart required"
-        @unknown default: status = "Camera extension: \(result.rawValue)"
+        case .completed:
+            status = "Camera extension: ready"
+            needsAttention = false
+        case .willCompleteAfterReboot:
+            status = "Camera extension: restart required"
+            needsAttention = true
+        @unknown default:
+            status = "Camera extension: \(result.rawValue)"
         }
     }
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
         status = "Camera extension error: \(error.localizedDescription)"
+        needsAttention = true
     }
 }

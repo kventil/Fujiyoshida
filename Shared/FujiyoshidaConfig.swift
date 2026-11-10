@@ -11,4 +11,6 @@ enum FujiyoshidaConfig {
     static let height: Int32 = 720
     static let frameRate: Int32 = 30
     static let pixelFormat: OSType = kCVPixelFormatType_32BGRA
+    static let viewerPropertyName = "4cc_fjyv_glob_0000"
+    static let viewerPropertySelector: UInt32 = 0x666A_7976
 }

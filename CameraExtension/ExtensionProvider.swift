@@ -5,6 +5,7 @@ import IOKit.audio
 import os.log
 
 private let log = Logger(subsystem: FujiyoshidaConfig.extensionBundleID, category: "extension")
+private let viewerProperty = CMIOExtensionProperty(rawValue: FujiyoshidaConfig.viewerPropertyName)
 
 final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
     private(set) var device: CMIOExtensionDevice!
@@ -69,7 +70,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
     }
 
     var availableProperties: Set<CMIOExtensionProperty> {
-        [.deviceTransportType, .deviceModel]
+        [.deviceTransportType, .deviceModel, viewerProperty]
     }
 
     func deviceProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionDeviceProperties {
@@ -80,6 +81,10 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         if properties.contains(.deviceModel) {
             deviceProperties.model = "Fujiyoshida"
         }
+        if properties.contains(viewerProperty) {
+            let active = queue.sync { sourceActive }
+            deviceProperties.setPropertyState(viewerState(active), forProperty: viewerProperty)
+        }
         return deviceProperties
     }
 
@@ -89,6 +94,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         queue.async { [self] in
             sourceActive = true
             startTimerIfNeeded()
+            device.notifyPropertiesChanged([viewerProperty: viewerState(true)])
         }
     }
 
@@ -96,7 +102,12 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         queue.async { [self] in
             sourceActive = false
             stopTimerIfIdle()
+            device.notifyPropertiesChanged([viewerProperty: viewerState(false)])
         }
+    }
+
+    private func viewerState(_ active: Bool) -> CMIOExtensionPropertyState<AnyObject> {
+        CMIOExtensionPropertyState(value: (active ? "1" : "0") as NSString)
     }
 
     func startSinkStreaming(client: CMIOExtensionClient) {
@@ -211,7 +222,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
         let font = CTFontCreateWithName("Helvetica Neue" as CFString, 40, nil)
-        let text = NSAttributedString(string: "Waiting for Fujifilm camera…", attributes: [
+        let text = NSAttributedString(string: "Waiting for Fujiyoshida…", attributes: [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0.75, alpha: 1),
         ])

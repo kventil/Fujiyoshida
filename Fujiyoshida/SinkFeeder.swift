@@ -30,6 +30,22 @@ final class SinkFeeder {
         queue = nil
     }
 
+    func isViewerActive() -> Bool {
+        guard queue != nil else { return false }
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(FujiyoshidaConfig.viewerPropertySelector),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
+        )
+        guard CMIOObjectHasProperty(deviceID, &address) else { return true }
+        var value: Unmanaged<CFString>?
+        var used: UInt32 = 0
+        let size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard CMIOObjectGetPropertyData(deviceID, &address, 0, nil, size, &used, &value) == noErr,
+              let text = value?.takeRetainedValue() else { return true }
+        return (text as String) == "1"
+    }
+
     func send(_ pixelBuffer: CVPixelBuffer) {
         guard let queue, CMSimpleQueueGetCount(queue) < CMSimpleQueueGetCapacity(queue) else { return }
 

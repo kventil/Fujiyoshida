@@ -14,8 +14,16 @@ struct PreviewWindow: View {
             PreviewLayerView(surface: capture.preview)
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
-                    if capture.isStreaming, let info = live.info, let point = info.focusPoint {
+                    if capture.isStreaming, capture.rotation == 0, let info = live.info, !info.faces.isEmpty {
+                        FaceBoxes(faces: info.faces, region: live.visibleRegion)
+                    }
+                }
+                .overlay {
+                    if capture.isStreaming, capture.rotation == 0, let info = live.info, let point = info.focusPoint {
                         FocusBox(point: point, state: info.focusState, region: live.visibleRegion)
+                        FocusTarget(region: live.visibleRegion) { location in
+                            capture.setFocusPoint(point.moved(to: location))
+                        }
                     }
                 }
                 .overlay {
@@ -37,7 +45,11 @@ struct PreviewWindow: View {
                 .animation(.easeInOut(duration: 0.2), value: live.message)
             CameraInfoBar(info: capture.isStreaming ? live.info : nil, rate: live.rate)
         }
-        .contextMenu { ExposureMenu(capture: capture) }
+        .contextMenu {
+            FocusButton(capture: capture)
+            Divider()
+            CameraControls(capture: capture)
+        }
         .frame(minWidth: 320, idealWidth: 400)
         .onAppear { capture.preview.isActive = true }
         .onDisappear { capture.preview.isActive = false }
@@ -77,7 +89,8 @@ private struct CameraInfoBar: View {
                 FocusIndicator(state: shown.focusState)
                 Text(shown.focusSummary)
                 Spacer()
-                Label(shown.battery, systemImage: "battery.75percent")
+                Label(shown.batteryText, systemImage: shown.batteryIcon)
+                    .foregroundStyle(shown.isBatteryLow ? Color.red : Color.primary)
             }
             HStack {
                 Text(shown.styleSummary)
@@ -130,6 +143,51 @@ private struct FocusBox: View {
         case .failed: return .red
         case .idle: return .white
         }
+    }
+}
+
+private struct FaceBoxes: View {
+    let faces: [CameraInfo.Face]
+    let region: CGRect
+
+    var body: some View {
+        GeometryReader { geometry in
+            ForEach(faces.indices, id: \.self) { index in
+                let face = faces[index]
+                let rect = CGRect(
+                    x: (face.rect.minX - region.minX) / region.width * geometry.size.width,
+                    y: (face.rect.minY - region.minY) / region.height * geometry.size.height,
+                    width: face.rect.width / region.width * geometry.size.width,
+                    height: face.rect.height / region.height * geometry.size.height
+                )
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color(red: face.red, green: face.green, blue: face.blue), lineWidth: face.isSelected ? 2 : 1)
+                    .shadow(color: .black.opacity(0.5), radius: 1)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+            }
+            .animation(.easeOut(duration: 0.1), value: faces)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct FocusTarget: View {
+    let region: CGRect
+    let select: (CGPoint) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    select(CGPoint(
+                        x: region.minX + location.x / geometry.size.width * region.width,
+                        y: region.minY + location.y / geometry.size.height * region.height
+                    ))
+                }
+        }
+        .help("Click to move the focus point")
     }
 }
 

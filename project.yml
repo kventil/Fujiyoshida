@@ -10,7 +10,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "3"
     ENABLE_HARDENED_RUNTIME: NO
 targets:
   Fujiyoshida:
@@ -25,6 +25,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.robertbahmann.Fujiyoshida
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_FILE: Fujiyoshida/Info.plist
         CODE_SIGN_ENTITLEMENTS: Fujiyoshida/Fujiyoshida.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: Fujiyoshida/Fujiyoshida-Bridging-Header.h

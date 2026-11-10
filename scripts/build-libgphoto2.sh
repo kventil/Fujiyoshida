@@ -41,7 +41,32 @@ put_old = '''	ret = ptp_transaction (params, &ptp, PTP_DP_GETDATA, 0, &data, &si
 	/* FIXME: handle out data (store locally?) */
 
 	return translate_ptp_result (ret);'''
-put_new = '''	ret = ptp_transaction (params, &ptp, PTP_DP_GETDATA, 0, &data, &size);
+put_new = '''	if (opcode == PTP_OC_TerminateOpenCapture) {
+		ret = PTP_RC_OK;
+		if (params->inliveview) {
+			ret = ptp_terminateopencapture (params, params->opencapture_transid);
+			params->inliveview = 0;
+		}
+		snprintf (opcode_result, sizeof(opcode_result), "0x%04x", ret);
+		return translate_ptp_result (ret);
+	}
+
+	x = strchr(val, ';');
+	if (x) {
+		unsigned int i, n = strlen(x + 1) / 2;
+		unsigned char *out = malloc (n ? n : 1);
+		for (i = 0; i < n; i++) {
+			unsigned int byte;
+			if (sscanf(x + 1 + i * 2, "%2x", &byte) != 1) { free (out); return GP_ERROR_BAD_PARAMETERS; }
+			out[i] = byte;
+		}
+		ret = ptp_transaction (params, &ptp, PTP_DP_SENDDATA, n, &out, NULL);
+		free (out);
+		snprintf (opcode_result, sizeof(opcode_result), "0x%04x", ret);
+		return translate_ptp_result (ret);
+	}
+
+	ret = ptp_transaction (params, &ptp, PTP_DP_GETDATA, 0, &data, &size);
 
 	{
 		unsigned int i, n = size;
