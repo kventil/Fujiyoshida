@@ -115,9 +115,9 @@ Fujiyoshida would not exist without **[libgphoto2](http://www.gphoto.org/)**, th
 
 If Fujiyoshida is useful to you, please consider supporting them:
 
-- ⭐ Star and contribute to [gphoto/libgphoto2](https://github.com/gphoto/libgphoto2) and [gphoto/gphoto2](https://github.com/gphoto/gphoto2).
-- 🐛 Report camera quirks and test results upstream; new camera support comes from people doing exactly that.
-- 📖 Read more at [gphoto.org](http://www.gphoto.org/) and in the [libgphoto2 documentation](http://www.gphoto.org/doc/).
+- Star and contribute to [gphoto/libgphoto2](https://github.com/gphoto/libgphoto2) and [gphoto/gphoto2](https://github.com/gphoto/gphoto2).
+- Report camera quirks and test results upstream; new camera support comes from people doing exactly that.
+- Read more at [gphoto.org](http://www.gphoto.org/) and in the [libgphoto2 documentation](http://www.gphoto.org/doc/).
 
 **Licensing.** libgphoto2 is licensed under the [GNU Lesser General Public License v2.1](https://github.com/gphoto/libgphoto2/blob/master/COPYING). Fujiyoshida links it dynamically and ships it inside the app bundle as separate libraries (`Contents/Frameworks/libgphoto2`).
 
